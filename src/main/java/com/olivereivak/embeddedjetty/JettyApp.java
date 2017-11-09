@@ -14,18 +14,14 @@ public class JettyApp {
 	public static final String COMMAND_STATUS = "status";
 	public static final String COMMAND_STOP = "stop";
 
-	private EmbeddedJetty embeddedJetty;
-	private CommandHandler commandHandler;
-	private CommandSender commandSender;
+	protected EmbeddedJetty embeddedJetty;
+	protected CommandHandler commandHandler;
+	protected CommandSender commandSender;
 
-	private int commandPort = 16586; // chosen by random.org, guaranteed to be random;
+	protected int commandPort = 16586; // chosen by random.org, guaranteed to be random;
+	protected boolean join = true;
 
-	public void run(String[] args) throws Exception {
-		if (embeddedJetty == null) {
-			embeddedJetty = new EmbeddedJetty();
-		}
-
-		commandHandler = new CommandHandler(commandPort, embeddedJetty);
+	public JettyApp run(String[] args) throws Exception {
 		commandSender = new CommandSender(commandPort);
 
 		String command = getCommand(args);
@@ -43,6 +39,8 @@ public class JettyApp {
 		default:
 			start();
 		}
+
+		return this;
 	}
 
 	private String getCommand(String[] args) {
@@ -50,12 +48,22 @@ public class JettyApp {
 	}
 
 	private void start() throws Exception {
-		Thread thread = new Thread(commandHandler);
-		thread.setName("CommandHandler");
-		thread.setDaemon(true);
-		thread.start();
+		if (embeddedJetty == null) {
+			embeddedJetty = new EmbeddedJetty();
+		}
+
+		commandHandler = getCommandHandler();
+
+		Thread handlerThread = new Thread(commandHandler);
+		handlerThread.setName("CommandHandler");
+		handlerThread.setDaemon(true);
+		handlerThread.start();
 
 		embeddedJetty.start();
+
+		if (join) {
+			embeddedJetty.join();
+		}
 	}
 
 	private void status() throws Exception {
@@ -86,6 +94,15 @@ public class JettyApp {
 	public JettyApp setCommandPort(int commandPort) {
 		this.commandPort = commandPort;
 		return this;
+	}
+
+	public JettyApp setJoin(boolean join) {
+		this.join = join;
+		return this;
+	}
+
+	protected CommandHandler getCommandHandler() {
+		return new CommandHandler(commandPort, embeddedJetty);
 	}
 
 }

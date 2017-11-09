@@ -23,9 +23,9 @@ public class CommandHandler implements Runnable {
 	public CommandHandler(Integer port, EmbeddedJetty embeddedJetty) {
 		this.port = port;
 		this.embeddedJetty = embeddedJetty;
-
 	}
 
+	@Override
 	public void run() {
 		try {
 			start();
@@ -37,19 +37,17 @@ public class CommandHandler implements Runnable {
 	public void start() throws Exception {
 		InetAddress address = InetAddress.getByName(null);
 
-		try (ServerSocket serverSocket = new ServerSocket(port, 0, address);
-			 Socket socket = serverSocket.accept();
+		boolean shouldStop = false;
 
-			 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-			 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-		) {
-			String inputLine;
+		while (!shouldStop) {
+			try (ServerSocket serverSocket = new ServerSocket(port, 0, address);
+				 Socket socket = serverSocket.accept();
 
-			while ((inputLine = in.readLine()) != null) {
-				boolean shouldStop = handleInput(out, inputLine);
-				if (shouldStop) {
-					break;
-				}
+				 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+				 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			) {
+				String inputLine = in.readLine();
+				shouldStop = handleInput(out, inputLine);
 			}
 		}
 	}
@@ -63,11 +61,15 @@ public class CommandHandler implements Runnable {
 		} else if (inputLine.equals(JettyApp.COMMAND_STOP)) {
 			out.println(RESPONSE_STOPPING);
 			embeddedJetty.stop();
-			// figure out why the vm won't stop without this
-			System.exit(0);
+			exit();
 			return true;
 		}
 		return false;
+	}
+
+	// TODO: figure out why the vm won't stop without this
+	protected void exit() {
+		System.exit(0);
 	}
 
 }

@@ -1,6 +1,7 @@
 package com.olivereivak.embeddedjetty;
 
 import com.google.inject.servlet.GuiceFilter;
+import org.apache.commons.io.output.TeeOutputStream;
 import org.eclipse.jetty.http.HttpCompliance;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.HttpConfiguration;
@@ -15,26 +16,31 @@ import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.util.RolloverFileOutputStream;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.EventListener;
 import java.util.List;
+import java.util.TimeZone;
 
 public class EmbeddedJetty {
 
 	private static final Logger log = LoggerFactory.getLogger(EmbeddedJetty.class);
 
-	private Server server;
+	protected Server server;
 
 	// These are used by the default implementation of getServer() so that they could be easily configured.
 	// If more options are needed, then improve or override getServer().
 
-	private int serverPort = 8080;
-	private String contextPath = "/";
-	private List<EventListener> eventListeners = new ArrayList<>();
+	protected int serverPort = 8080;
+	protected String contextPath = "/";
+	protected List<EventListener> eventListeners = new ArrayList<>();
 
 	private int minThreads = 8;
 	private int maxThreads = 200;
@@ -61,6 +67,16 @@ public class EmbeddedJetty {
 	private long lowResourcesMaxMemory = 0;
 	private int lowResourcesMaxLowResourcesTime = 0;
 
+	private boolean loggingEnabled = true;
+	private String loggingDirectory = "jetty_logs";
+	private String loggingFile = "yyyy_mm_dd.log";
+	private boolean loggingAppend = true;
+	private int loggingRetainDays = 31;
+	private String loggingTimezone = "GMT";
+
+	private int stopTimeout = 10000;
+	private boolean stopAtShutdown = true;
+
 	public void start() throws Exception {
 		log.info("Starting EmbeddedJetty on port {}", serverPort);
 
@@ -72,16 +88,23 @@ public class EmbeddedJetty {
 			serverContextHandler.addEventListener(eventListener);
 		}
 
-		serverContextHandler.addFilter(GuiceFilter.class, "/*", null);
-		serverContextHandler.addServlet(DefaultServlet.class, "/");
-
 		server.start();
-		server.join();
 	}
 
 	public void stop() throws Exception {
 		log.info("Stopping embedded jetty");
 		server.stop();
+	}
+
+	public void join() throws InterruptedException {
+		server.join();
+	}
+
+	protected ServletContextHandler getServerContextHandler() {
+		ServletContextHandler sch = new ServletContextHandler(server, contextPath);
+		sch.addFilter(GuiceFilter.class, "/*", null);
+		sch.addServlet(DefaultServlet.class, "/");
+		return sch;
 	}
 
 	/**
@@ -127,7 +150,17 @@ public class EmbeddedJetty {
 		requestLogHandler.setRequestLog(requestLog);
 		handlers.addHandler(requestLogHandler);
 
-		// TODO: logging
+		if (loggingEnabled) {
+			createLoggingDirectory();
+			PrintStream logWriter = new PrintStream(createRolloverFileOutputStream());
+			log.info("Adding System.out and System.err to log writer");
+
+			TeeOutputStream teeOut = new TeeOutputStream(System.out, logWriter);
+			TeeOutputStream teeErr = new TeeOutputStream(System.err, logWriter);
+
+			System.setOut(new PrintStream(teeOut, true));
+			System.setErr(new PrintStream(teeErr, true));
+		}
 
 		LowResourceMonitor lowResourcesMonitor = new LowResourceMonitor(server);
 		lowResourcesMonitor.setPeriod(lowResourcesPeriod);
@@ -138,11 +171,31 @@ public class EmbeddedJetty {
 		lowResourcesMonitor.setMaxLowResourcesTime(lowResourcesMaxLowResourcesTime);
 		server.addBean(lowResourcesMonitor);
 
+		server.setStopTimeout(stopTimeout);
+		server.setStopAtShutdown(stopAtShutdown);
+
 		return server;
 	}
 
-	protected ServletContextHandler getServerContextHandler() {
-		return new ServletContextHandler(server, contextPath);
+	private void createLoggingDirectory() {
+		File logDir = new File(loggingDirectory);
+		if (logDir.exists()) {
+			log.info("Log directory already exists");
+		} else if (!logDir.mkdirs()) {
+			throw new RuntimeException("Failed to create log directory");
+		}
+	}
+
+	private RolloverFileOutputStream createRolloverFileOutputStream() {
+		String logFile = new File(loggingDirectory, loggingFile).getAbsolutePath();
+		RolloverFileOutputStream rfos;
+		try {
+			rfos = new RolloverFileOutputStream(logFile, loggingAppend, loggingRetainDays,
+					TimeZone.getTimeZone(loggingTimezone));
+		} catch (IOException e) {
+			throw new RuntimeException("Could not create RolloverFileOutputStream", e);
+		}
+		return rfos;
 	}
 
 	// Convenient builder style setters for fast configuration
@@ -252,13 +305,53 @@ public class EmbeddedJetty {
 		return this;
 	}
 
-	public EmbeddedJetty setLowResourcesMaxMemory(int lowResourcesMaxMemory) {
+	public EmbeddedJetty setLowResourcesMaxMemory(long lowResourcesMaxMemory) {
 		this.lowResourcesMaxMemory = lowResourcesMaxMemory;
 		return this;
 	}
 
 	public EmbeddedJetty setLowResourcesMaxLowResourcesTime(int lowResourcesMaxLowResourcesTime) {
 		this.lowResourcesMaxLowResourcesTime = lowResourcesMaxLowResourcesTime;
+		return this;
+	}
+
+	public EmbeddedJetty setLoggingDirectory(String loggingDirectory) {
+		this.loggingDirectory = loggingDirectory;
+		return this;
+	}
+
+	public EmbeddedJetty setLoggingFile(String loggingFile) {
+		this.loggingFile = loggingFile;
+		return this;
+	}
+
+	public EmbeddedJetty setLoggingAppend(boolean loggingAppend) {
+		this.loggingAppend = loggingAppend;
+		return this;
+	}
+
+	public EmbeddedJetty setLoggingRetainDays(int loggingRetainDays) {
+		this.loggingRetainDays = loggingRetainDays;
+		return this;
+	}
+
+	public EmbeddedJetty setLoggingTimezone(String loggingTimezone) {
+		this.loggingTimezone = loggingTimezone;
+		return this;
+	}
+
+	public EmbeddedJetty setLoggingEnabled(boolean loggingEnabled) {
+		this.loggingEnabled = loggingEnabled;
+		return this;
+	}
+
+	public EmbeddedJetty setStopTimeout(int stopTimeout) {
+		this.stopTimeout = stopTimeout;
+		return this;
+	}
+
+	public EmbeddedJetty setStopAtShutdown(boolean stopAtShutdown) {
+		this.stopAtShutdown = stopAtShutdown;
 		return this;
 	}
 }

@@ -7,6 +7,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.Socket;
 
@@ -39,6 +40,9 @@ public class CommandSender {
 			) {
 			out.println(command);
 			return in.readLine();
+		} catch (ConnectException e) {
+			log.error("Failed to connect to application", e);
+			return null;
 		}
 	}
 
