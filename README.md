@@ -2,6 +2,7 @@
 
 A micro-library to add embedded Jetty support to a java application.
 
+[![Build Status](https://travis-ci.org/OliverEivak/embedded-jetty.svg?branch=master)](https://travis-ci.org/OliverEivak/embedded-jetty)
 
 ## How to use
 Build and install the maven project, then add the dependency to your project:
