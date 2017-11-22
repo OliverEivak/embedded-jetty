@@ -47,6 +47,7 @@ public class EmbeddedJetty {
 	private int requestHeaderSize = 8192;
 	private int responseHeaderSize = 8192;
 	private boolean sendServerVersion = false;
+	private boolean sendDateHeader = true;
 
 	private HttpCompliance httpCompliance = HttpCompliance.RFC7230;
 
@@ -122,6 +123,7 @@ public class EmbeddedJetty {
 		httpConfig.setRequestHeaderSize(requestHeaderSize);
 		httpConfig.setResponseHeaderSize(responseHeaderSize);
 		httpConfig.setSendServerVersion(sendServerVersion);
+		httpConfig.setSendDateHeader(sendDateHeader);
 
 		HttpConnectionFactory httpConnectionFactory = new HttpConnectionFactory(httpConfig);
 		httpConnectionFactory.setHttpCompliance(httpCompliance);
@@ -348,6 +350,11 @@ public class EmbeddedJetty {
 
 	public EmbeddedJetty setStopAtShutdown(boolean stopAtShutdown) {
 		this.stopAtShutdown = stopAtShutdown;
+		return this;
+	}
+
+	public EmbeddedJetty setSendDateHeader(boolean sendDateHeader) {
+		this.sendDateHeader = sendDateHeader;
 		return this;
 	}
 }
