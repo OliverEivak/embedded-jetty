@@ -13,7 +13,6 @@ import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.server.handler.DefaultHandler;
 import org.eclipse.jetty.server.handler.HandlerCollection;
-import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.RolloverFileOutputStream;
@@ -51,8 +50,8 @@ public class EmbeddedJetty {
 
 	private HttpCompliance httpCompliance = HttpCompliance.RFC7230;
 
-	private String requestLogFileName = null;
-	private String requestLogFilenameDateFormat = null;
+	private String requestLogFileName = "jetty_logs/yyyy_mm_dd.request.log";
+	private String requestLogFilenameDateFormat = "yyyy_MM_dd";
 	private int requestLogRetainDays = 31;
 	private boolean requestLogAppend = true;
 	private boolean requestLogExtended = true;
@@ -136,20 +135,6 @@ public class EmbeddedJetty {
 		handlers.setHandlers(new Handler[] { contexts, new DefaultHandler() });
 		server.setHandler(handlers);
 
-		NCSARequestLog requestLog = new NCSARequestLog();
-		requestLog.setFilename(requestLogFileName);
-		requestLog.setFilenameDateFormat(requestLogFilenameDateFormat);
-		requestLog.setRetainDays(requestLogRetainDays);
-		requestLog.setAppend(requestLogAppend);
-		requestLog.setExtended(requestLogExtended);
-		requestLog.setLogCookies(requestLogLogCookies);
-		requestLog.setLogTimeZone(requestLogTimeZone);
-		requestLog.setLogLatency(requestLogLogLatency);
-
-		RequestLogHandler requestLogHandler = new RequestLogHandler();
-		requestLogHandler.setRequestLog(requestLog);
-		handlers.addHandler(requestLogHandler);
-
 		if (loggingEnabled) {
 			createLoggingDirectory();
 			PrintStream logWriter = new PrintStream(createRolloverFileOutputStream());
@@ -160,6 +145,17 @@ public class EmbeddedJetty {
 
 			System.setOut(new PrintStream(teeOut, true));
 			System.setErr(new PrintStream(teeErr, true));
+
+			NCSARequestLog requestLog = new NCSARequestLog();
+			requestLog.setFilename(requestLogFileName);
+			requestLog.setFilenameDateFormat(requestLogFilenameDateFormat);
+			requestLog.setRetainDays(requestLogRetainDays);
+			requestLog.setAppend(requestLogAppend);
+			requestLog.setExtended(requestLogExtended);
+			requestLog.setLogCookies(requestLogLogCookies);
+			requestLog.setLogTimeZone(requestLogTimeZone);
+			requestLog.setLogLatency(requestLogLogLatency);
+			server.setRequestLog(requestLog);
 		}
 
 		LowResourceMonitor lowResourcesMonitor = new LowResourceMonitor(server);
